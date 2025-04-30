@@ -9,32 +9,67 @@ const TimeboxingApp = () => {
     Array(19).fill().map(() => ({ ':00': '', ':30': '' }))
   );
   
-  // Cargar datos desde localStorage al iniciar
+  // Cargar datos desde localStorage al iniciar - VERSIÓN ARREGLADA
   useEffect(() => {
     try {
+      console.log("Intentando cargar datos desde localStorage...");
       const savedData = localStorage.getItem('timeboxingData');
+      console.log("Datos recuperados:", savedData ? "Sí" : "No");
+      
       if (savedData) {
         const parsedData = JSON.parse(savedData);
+        console.log("Datos parseados correctamente");
+        
+        // Asegurarse de que schedule tenga la estructura correcta
+        const loadedSchedule = parsedData.schedule || [];
+        // Crear un nuevo array para evitar problemas de referencia
+        const safeSchedule = Array(19).fill().map((_, index) => {
+          if (index < loadedSchedule.length) {
+            return {
+              ':00': loadedSchedule[index][':00'] || '',
+              ':30': loadedSchedule[index][':30'] || ''
+            };
+          }
+          return { ':00': '', ':30': '' };
+        });
+        
         setDate(parsedData.date || '');
-        setPriorities(parsedData.priorities || ['', '', '']);
+        setPriorities(Array.isArray(parsedData.priorities) ? [...parsedData.priorities] : ['', '', '']);
         setBrainDump(parsedData.brainDump || '');
-        setSchedule(parsedData.schedule || Array(19).fill().map(() => ({ ':00': '', ':30': '' })));
+        setSchedule(safeSchedule);
+        
+        console.log("Datos cargados correctamente en el estado");
       }
     } catch (error) {
       console.error('Error al cargar datos:', error);
     }
   }, []);
   
-  // Guardar datos en localStorage cuando cambian
+  // Guardar datos en localStorage cuando cambian - VERSIÓN ARREGLADA
   useEffect(() => {
     try {
+      // No guardar en el primer renderizado (cuando los estados están vacíos)
+      if (date === '' && priorities.every(p => p === '') && brainDump === '' && 
+          schedule.every(s => s[':00'] === '' && s[':30'] === '')) {
+        console.log("Saltando guardado inicial con datos vacíos");
+        return;
+      }
+      
+      console.log("Guardando datos en localStorage...");
+      
+      // Crear copias profundas de los datos para evitar referencias compartidas
+      const scheduleCopy = schedule.map(slot => ({ ...slot }));
+      const prioritiesCopy = [...priorities];
+      
       const dataToSave = {
         date,
-        priorities,
+        priorities: prioritiesCopy,
         brainDump,
-        schedule
+        schedule: scheduleCopy
       };
+      
       localStorage.setItem('timeboxingData', JSON.stringify(dataToSave));
+      console.log("Datos guardados correctamente en localStorage");
     } catch (error) {
       console.error('Error al guardar datos:', error);
     }
@@ -47,17 +82,19 @@ const TimeboxingApp = () => {
     setPriorities(newPriorities);
   };
   
-  // Manejar cambios en el horario
-  const handleScheduleChange = (hour, half, value) => {
-    const newSchedule = [...schedule];
-    const hourIndex = getHourIndex(hour);
+  // Manejar cambios en el horario - VERSIÓN ARREGLADA
+  const handleScheduleChange = (timeIndex, half, value) => {
+    // Crear una copia profunda del estado schedule
+    const newSchedule = schedule.map(slot => ({ ...slot }));
     
+    // Configurar el valor en la copia
     if (half === ':00') {
-      newSchedule[hourIndex] = {...newSchedule[hourIndex], ':00': value};
+      newSchedule[timeIndex] = { ...newSchedule[timeIndex], ':00': value };
     } else {
-      newSchedule[hourIndex] = {...newSchedule[hourIndex], ':30': value};
+      newSchedule[timeIndex] = { ...newSchedule[timeIndex], ':30': value };
     }
     
+    // Actualizar el estado con la copia
     setSchedule(newSchedule);
   };
   
@@ -79,14 +116,17 @@ const TimeboxingApp = () => {
     return '';
   };
 
-  // Limpiar todos los datos
+  // Limpiar todos los datos - VERSIÓN ARREGLADA
   const handleClear = () => {
     if (window.confirm('¿Estás seguro que deseas borrar todos los datos?')) {
       setDate('');
       setPriorities(['', '', '']);
       setBrainDump('');
       setSchedule(Array(19).fill().map(() => ({ ':00': '', ':30': '' })));
+      
+      // Eliminar datos del localStorage
       localStorage.removeItem('timeboxingData');
+      console.log("Datos borrados correctamente");
     }
   };
 
@@ -179,11 +219,8 @@ const TimeboxingApp = () => {
     marginBottom: 0
   };
 
-  // Media query para pantallas más grandes
-  if (window.innerWidth >= 768) {
-    contentContainerStyle.gridTemplateColumns = '300px 1fr';
-    contentContainerStyle.gap = '2rem';
-  }
+  // Aplicar estilos responsivos
+  const isLargeScreen = window.innerWidth >= 768;
   
   return (
     <div style={appContainerStyle}>
@@ -201,7 +238,11 @@ const TimeboxingApp = () => {
           </div>
         </div>
         
-        <div style={contentContainerStyle}>
+        <div style={{
+          ...contentContainerStyle,
+          gridTemplateColumns: isLargeScreen ? '300px 1fr' : '1fr',
+          gap: isLargeScreen ? '2rem' : '1rem'
+        }}>
           {/* Columna izquierda - Prioridades y Brain Dump */}
           <div>
             <div style={sectionContainerStyle}>
@@ -250,13 +291,13 @@ const TimeboxingApp = () => {
                   <input
                     type="text"
                     value={schedule[index][':00'] || ''}
-                    onChange={(e) => handleScheduleChange(index + (index < 7 ? 5 : index > 7 ? -7 : 12), ':00', e.target.value)}
+                    onChange={(e) => handleScheduleChange(index, ':00', e.target.value)}
                     style={inputStyle}
                   />
                   <input
                     type="text"
                     value={schedule[index][':30'] || ''}
-                    onChange={(e) => handleScheduleChange(index + (index < 7 ? 5 : index > 7 ? -7 : 12), ':30', e.target.value)}
+                    onChange={(e) => handleScheduleChange(index, ':30', e.target.value)}
                     style={inputStyle}
                   />
                 </div>
